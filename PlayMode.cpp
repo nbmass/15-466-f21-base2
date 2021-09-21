@@ -201,8 +201,8 @@ void PlayMode::update(float elapsed) {
 		if (is_carried[i]) {
 			//lift cube
 			cubes[i]->position.z += lift_z_prime;
-			if (cubes[i]->position.z > 3.8f) cubes[i]->position.z = 3.8f;
 			if (cubes[i]->position.z < 1.0f) cubes[i]->position.z = 1.0f;
+			if (cubes[i]->position.z > 3.8f) cubes[i]->position.z = 3.8f;
 			//move cube
 			if (lift->position.z > 0.0f) {
 				cubes[i]->position += X_prime;
@@ -232,8 +232,8 @@ void PlayMode::update(float elapsed) {
 	chassis->position += X_prime;
 	//control lift
 	lift->position.z += lift_z_prime;
-	if (lift->position.z > 2.8f) lift->position.z = 2.8f;
 	if (lift->position.z < 0.0f) lift->position.z = 0.0f;
+	if (lift->position.z > 2.8f) lift->position.z = 2.8f;
 
 	// std::cout << "chassis: " << chassis->position.x << ", " << chassis->position.y << ", " << chassis->position.z
 	//           << "   lift: " << lift->position.x << ", " << lift->position.y << ", " << lift->position.z
