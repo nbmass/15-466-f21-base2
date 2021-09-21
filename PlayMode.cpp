@@ -14,13 +14,13 @@
 
 GLuint hexapod_meshes_for_lit_color_texture_program = 0;
 Load< MeshBuffer > hexapod_meshes(LoadTagDefault, []() -> MeshBuffer const * {
-	MeshBuffer const *ret = new MeshBuffer(data_path("hexapod.pnct"));
+	MeshBuffer const *ret = new MeshBuffer(data_path("forklift.pnct"));
 	hexapod_meshes_for_lit_color_texture_program = ret->make_vao_for_program(lit_color_texture_program->program);
 	return ret;
 });
 
 Load< Scene > hexapod_scene(LoadTagDefault, []() -> Scene const * {
-	return new Scene(data_path("hexapod.scene"), [&](Scene &scene, Scene::Transform *transform, std::string const &mesh_name){
+	return new Scene(data_path("forklift.scene"), [&](Scene &scene, Scene::Transform *transform, std::string const &mesh_name){
 		Mesh const &mesh = hexapod_meshes->lookup(mesh_name);
 
 		scene.drawables.emplace_back(transform);
@@ -39,17 +39,21 @@ Load< Scene > hexapod_scene(LoadTagDefault, []() -> Scene const * {
 PlayMode::PlayMode() : scene(*hexapod_scene) {
 	//get pointers to leg for convenience:
 	for (auto &transform : scene.transforms) {
-		if (transform.name == "Hip.FL") hip = &transform;
-		else if (transform.name == "UpperLeg.FL") upper_leg = &transform;
-		else if (transform.name == "LowerLeg.FL") lower_leg = &transform;
+		if (transform.name == "Chassis") chassis = &transform;
+		if (transform.name == "Lift") lift = &transform;
+		if (transform.name == "Blue_Cube1" ||
+		    transform.name == "Blue_Cube2" ||
+		    transform.name == "Red_Cube1" ||
+		    transform.name == "Red_Cube2" ||
+		    transform.name == "Green_Cube1" ||
+		    transform.name == "Green_Cube2") {
+			cubes.push_back(&transform);
+			is_carried.push_back(false);
+		}
 	}
-	if (hip == nullptr) throw std::runtime_error("Hip not found.");
-	if (upper_leg == nullptr) throw std::runtime_error("Upper leg not found.");
-	if (lower_leg == nullptr) throw std::runtime_error("Lower leg not found.");
 
-	hip_base_rotation = hip->rotation;
-	upper_leg_base_rotation = upper_leg->rotation;
-	lower_leg_base_rotation = lower_leg->rotation;
+	chassis_base_rotation = chassis->rotation;
+	lift_base_position = lift->position;
 
 	//get pointer to camera for convenience:
 	if (scene.cameras.size() != 1) throw std::runtime_error("Expecting scene to have exactly one camera, but it has " + std::to_string(scene.cameras.size()));
@@ -81,6 +85,30 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 			down.downs += 1;
 			down.pressed = true;
 			return true;
+		} else if (evt.key.keysym.sym == SDLK_LEFT) {
+			left_arrow.downs += 1;
+			left_arrow.pressed = true;
+			return true;
+		} else if (evt.key.keysym.sym == SDLK_RIGHT) {
+			right_arrow.downs += 1;
+			right_arrow.pressed = true;
+			return true;
+		} else if (evt.key.keysym.sym == SDLK_UP) {
+			up_arrow.downs += 1;
+			up_arrow.pressed = true;
+			return true;
+		} else if (evt.key.keysym.sym == SDLK_DOWN) {
+			down_arrow.downs += 1;
+			down_arrow.pressed = true;
+			return true;
+		} else if (evt.key.keysym.sym == SDLK_q) {
+			lift_down.downs += 1;
+			lift_down.pressed = true;
+			return true;
+		} else if (evt.key.keysym.sym == SDLK_e) {
+			lift_up.downs += 1;
+			lift_up.pressed = true;
+			return true;
 		}
 	} else if (evt.type == SDL_KEYUP) {
 		if (evt.key.keysym.sym == SDLK_a) {
@@ -94,6 +122,24 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 			return true;
 		} else if (evt.key.keysym.sym == SDLK_s) {
 			down.pressed = false;
+			return true;
+		} else if (evt.key.keysym.sym == SDLK_LEFT) {
+			left_arrow.pressed = false;
+			return true;
+		} else if (evt.key.keysym.sym == SDLK_RIGHT) {
+			right_arrow.pressed = false;
+			return true;
+		} else if (evt.key.keysym.sym == SDLK_UP) {
+			up_arrow.pressed = false;
+			return true;
+		} else if (evt.key.keysym.sym == SDLK_DOWN) {
+			down_arrow.pressed = false;
+			return true;
+		} else if (evt.key.keysym.sym == SDLK_q) {
+			lift_down.pressed = false;
+			return true;
+		} else if (evt.key.keysym.sym == SDLK_e) {
+			lift_up.pressed = false;
 			return true;
 		}
 	} else if (evt.type == SDL_MOUSEBUTTONDOWN) {
@@ -122,21 +168,83 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 void PlayMode::update(float elapsed) {
 
 	//slowly rotates through [0,1):
-	wobble += elapsed / 10.0f;
-	wobble -= std::floor(wobble);
+	// wobble += elapsed / 10.0f;
+	// wobble -= std::floor(wobble);
 
-	hip->rotation = hip_base_rotation * glm::angleAxis(
-		glm::radians(5.0f * std::sin(wobble * 2.0f * float(M_PI))),
-		glm::vec3(0.0f, 1.0f, 0.0f)
+	// hip->rotation = hip_base_rotation * glm::angleAxis(
+	// 	glm::radians(5.0f * std::sin(wobble * 2.0f * float(M_PI))),
+	// 	glm::vec3(0.0f, 1.0f, 0.0f)
+	// );
+
+	glm::vec3 direction = glm::vec3(std::sin(glm::radians(chassis_angle)), -std::cos(glm::radians(chassis_angle)), 0.0f);
+	glm::vec3 lift_position = chassis->position + 3.0f * direction;
+
+	glm::vec3 X_prime(0);
+	float lift_z_prime = 0.0f;
+	float theta_prime = 0.0f;
+
+	if (left_arrow.pressed && !right_arrow.pressed) theta_prime = 50.0f * elapsed;
+	if (!left_arrow.pressed && right_arrow.pressed) theta_prime = -50.0f * elapsed;
+	if (!down_arrow.pressed && up_arrow.pressed) X_prime = 5.0f * elapsed * direction;
+	if (down_arrow.pressed && !up_arrow.pressed) X_prime = -5.0f * elapsed * direction;
+	if (lift_up.pressed && !lift_down.pressed) lift_z_prime = elapsed;
+	if (!lift_up.pressed && lift_down.pressed) lift_z_prime = -elapsed;
+
+	//move cubes and stuff
+	for (uint32_t i = 0; i < cubes.size(); i++) {
+		is_carried[i] = (std::abs(lift_position.x - cubes[i]->position.x) < 1.0f) &&
+		                (std::abs(lift_position.y - cubes[i]->position.y) < 1.0f) &&
+				            (std::abs(lift->position.z - (cubes[i]->position.z - 1)) < 0.1f);
+		// is_carried[i] = (glm::length(lift_position.x + lift_position.y - (cubes[i]->position.x + cubes[i]->position.y)) < 1.0f) &&
+		// 		(std::abs(lift->position.z - (cubes[i]->position.z - 1)) < 0.1f);
+
+		if (is_carried[i]) {
+			//lift cube
+			cubes[i]->position.z += lift_z_prime;
+			if (cubes[i]->position.z < 1) cubes[i]->position.z = 1;
+			if (cubes[i]->position.z > 3.8) cubes[i]->position.z = 3.8;
+			//move cube
+			if (lift->position.z > 0) {
+				cubes[i]->position += X_prime;
+				//rotate cube
+				cubes[i]->rotation *= glm::angleAxis(
+					glm::radians(theta_prime),
+					glm::vec3(0.0f, 0.0f, 1.0f)
+				);
+				//move cube when chassis rotates
+				glm::vec3 cube_offset_old = cubes[i]->position - chassis->position;
+				glm::vec3 cube_offset_new = cube_offset_old * glm::angleAxis(
+					glm::radians(theta_prime),
+					glm::vec3(0.0f, 0.0f, 1.0f)
+				);
+				cubes[i]->position += cube_offset_old - cube_offset_new;
+			}
+		}
+	}
+
+	//turn forklift
+	chassis_angle += theta_prime;
+	chassis->rotation = chassis_base_rotation * glm::angleAxis(
+			glm::radians(chassis_angle),
+			glm::vec3(0.0f, 0.0f, 1.0f)
 	);
-	upper_leg->rotation = upper_leg_base_rotation * glm::angleAxis(
-		glm::radians(7.0f * std::sin(wobble * 2.0f * 2.0f * float(M_PI))),
-		glm::vec3(0.0f, 0.0f, 1.0f)
-	);
-	lower_leg->rotation = lower_leg_base_rotation * glm::angleAxis(
-		glm::radians(10.0f * std::sin(wobble * 3.0f * 2.0f * float(M_PI))),
-		glm::vec3(0.0f, 0.0f, 1.0f)
-	);
+	//drive forklift
+	chassis->position += X_prime;
+	//control lift
+	lift->position.z += lift_z_prime;
+	if (lift->position.z < 0) lift->position.z = 0;
+	if (lift->position.z > 2.8) lift->position.z = 2.8;
+
+	// std::cout << "chassis: " << chassis->position.x << ", " << chassis->position.y << ", " << chassis->position.z
+	//           << "   lift: " << lift->position.x << ", " << lift->position.y << ", " << lift->position.z
+	// 					<< "   cube: " << cube->position.x << ", " << cube->position.y << ", " << cube->position.z
+	// 					<< "   is_carried: " << is_carried
+	// 					<< std::endl;
+	// std::cout << "chassis: " << chassis->position.x << ", " << chassis->position.y << ", " << chassis->position.z
+	//           << "   lift: " << lift_position.x << ", " << lift_position.y << ", " << lift_position.z
+	// 					<< "   cube: " << cube->position.x << ", " << cube->position.y << ", " << cube->position.z << std::endl;
+	//lift boxes
+
 
 	//move camera:
 	{
@@ -190,25 +298,25 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 
 	scene.draw(*camera);
 
-	{ //use DrawLines to overlay some text:
-		glDisable(GL_DEPTH_TEST);
-		float aspect = float(drawable_size.x) / float(drawable_size.y);
-		DrawLines lines(glm::mat4(
-			1.0f / aspect, 0.0f, 0.0f, 0.0f,
-			0.0f, 1.0f, 0.0f, 0.0f,
-			0.0f, 0.0f, 1.0f, 0.0f,
-			0.0f, 0.0f, 0.0f, 1.0f
-		));
+	// { //use DrawLines to overlay some text:
+	// 	glDisable(GL_DEPTH_TEST);
+	// 	float aspect = float(drawable_size.x) / float(drawable_size.y);
+	// 	DrawLines lines(glm::mat4(
+	// 		1.0f / aspect, 0.0f, 0.0f, 0.0f,
+	// 		0.0f, 1.0f, 0.0f, 0.0f,
+	// 		0.0f, 0.0f, 1.0f, 0.0f,
+	// 		0.0f, 0.0f, 0.0f, 1.0f
+	// 	));
 
-		constexpr float H = 0.09f;
-		lines.draw_text("Mouse motion rotates camera; WASD moves; escape ungrabs mouse",
-			glm::vec3(-aspect + 0.1f * H, -1.0 + 0.1f * H, 0.0),
-			glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
-			glm::u8vec4(0x00, 0x00, 0x00, 0x00));
-		float ofs = 2.0f / drawable_size.y;
-		lines.draw_text("Mouse motion rotates camera; WASD moves; escape ungrabs mouse",
-			glm::vec3(-aspect + 0.1f * H + ofs, -1.0 + + 0.1f * H + ofs, 0.0),
-			glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
-			glm::u8vec4(0xff, 0xff, 0xff, 0x00));
-	}
+	// 	constexpr float H = 0.09f;
+	// 	lines.draw_text("Mouse motion rotates camera; WASD moves; escape ungrabs mouse",
+	// 		glm::vec3(-aspect + 0.1f * H, -1.0 + 0.1f * H, 0.0),
+	// 		glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
+	// 		glm::u8vec4(0x00, 0x00, 0x00, 0x00));
+	// 	float ofs = 2.0f / drawable_size.y;
+	// 	lines.draw_text("Mouse motion rotates camera; WASD moves; escape ungrabs mouse",
+	// 		glm::vec3(-aspect + 0.1f * H + ofs, -1.0 + + 0.1f * H + ofs, 0.0),
+	// 		glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
+	// 		glm::u8vec4(0xff, 0xff, 0xff, 0x00));
+	// }
 }
