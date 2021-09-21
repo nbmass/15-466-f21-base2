@@ -8,10 +8,6 @@ Screen Shot:
 
 ![Screen Shot](screenshot.png)
 
-How Your Asset Pipeline Works:
-
-(TODO: describe the steps in your asset pipeline, from source files to tiles/backgrounds/whatever you upload to the PPU466.)
-
 How To Play:
 
 Use the arrow keys to drive the forklift. Use E to raise the life and Q to lower it.
