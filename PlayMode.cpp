@@ -179,7 +179,7 @@ void PlayMode::update(float elapsed) {
 	glm::vec3 direction = glm::vec3(std::sin(glm::radians(chassis_angle)), -std::cos(glm::radians(chassis_angle)), 0.0f);
 	glm::vec3 lift_position = chassis->position + 3.0f * direction;
 
-	glm::vec3 X_prime(0);
+	glm::vec3 X_prime(0.0f);
 	float lift_z_prime = 0.0f;
 	float theta_prime = 0.0f;
 
@@ -194,17 +194,17 @@ void PlayMode::update(float elapsed) {
 	for (uint32_t i = 0; i < cubes.size(); i++) {
 		is_carried[i] = (std::abs(lift_position.x - cubes[i]->position.x) < 1.0f) &&
 		                (std::abs(lift_position.y - cubes[i]->position.y) < 1.0f) &&
-				            (std::abs(lift->position.z - (cubes[i]->position.z - 1)) < 0.1f);
+				            (std::abs(lift->position.z - (cubes[i]->position.z - 1.0f)) < 0.1f);
 		// is_carried[i] = (glm::length(lift_position.x + lift_position.y - (cubes[i]->position.x + cubes[i]->position.y)) < 1.0f) &&
 		// 		(std::abs(lift->position.z - (cubes[i]->position.z - 1)) < 0.1f);
 
 		if (is_carried[i]) {
 			//lift cube
 			cubes[i]->position.z += lift_z_prime;
-			if (cubes[i]->position.z < 1) cubes[i]->position.z = 1;
-			if (cubes[i]->position.z > 3.8) cubes[i]->position.z = 3.8;
+			if (cubes[i]->position.z < 1.0f) cubes[i]->position.z = 1.0f;
+			if (cubes[i]->position.z > 3.8f) cubes[i]->position.z = 3.8f;
 			//move cube
-			if (lift->position.z > 0) {
+			if (lift->position.z > 0.0f) {
 				cubes[i]->position += X_prime;
 				//rotate cube
 				cubes[i]->rotation *= glm::angleAxis(
@@ -232,8 +232,8 @@ void PlayMode::update(float elapsed) {
 	chassis->position += X_prime;
 	//control lift
 	lift->position.z += lift_z_prime;
-	if (lift->position.z < 0) lift->position.z = 0;
-	if (lift->position.z > 2.8) lift->position.z = 2.8;
+	if (lift->position.z < 0.0f) lift->position.z = 0.0f;
+	if (lift->position.z > 2.8f) lift->position.z = 2.8f;
 
 	// std::cout << "chassis: " << chassis->position.x << ", " << chassis->position.y << ", " << chassis->position.z
 	//           << "   lift: " << lift->position.x << ", " << lift->position.y << ", " << lift->position.z
